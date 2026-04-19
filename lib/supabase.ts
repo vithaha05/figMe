@@ -19,11 +19,19 @@ function getSupabaseClient() {
   return supabaseClient
 }
 
+const getRedirectUrl = () => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/auth/callback`
+  }
+
+  return `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/auth/callback`
+}
+
 export async function signInWithGoogle() {
   return getSupabaseClient().auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      redirectTo: getRedirectUrl(),
     },
   })
 }
@@ -32,7 +40,7 @@ export async function signInWithGitHub() {
   return getSupabaseClient().auth.signInWithOAuth({
     provider: 'github',
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      redirectTo: getRedirectUrl(),
     },
   })
 }
