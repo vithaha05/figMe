@@ -1,63 +1,33 @@
-// PATTERN: Observer — Supabase onAuthStateChange is the event emitter.
-// All UI components subscribe via useAuth() hook rather than polling.
+import { createBrowserClient } from '@supabase/ssr'
 
-import { createClient } from '@supabase/supabase-js'
-
-let supabaseClient: ReturnType<typeof createClient> | null = null
-
-function getSupabaseClient() {
-  if (supabaseClient) return supabaseClient
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase environment variables')
-  }
-
-  supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
-  return supabaseClient
-}
+// Single instance — createBrowserClient manages cookies automatically
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 const getRedirectUrl = () => {
   if (typeof window !== 'undefined') {
     return `${window.location.origin}/auth/callback`
   }
-
-  return `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/auth/callback`
+  const url = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  return `${url.startsWith('http') ? url : `https://${url}`}/auth/callback`
 }
 
 export async function signInWithGoogle() {
-  return getSupabaseClient().auth.signInWithOAuth({
+  return supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: {
-      redirectTo: getRedirectUrl(),
-    },
+    options: { redirectTo: getRedirectUrl() },
   })
 }
 
 export async function signInWithGitHub() {
-  return getSupabaseClient().auth.signInWithOAuth({
+  return supabase.auth.signInWithOAuth({
     provider: 'github',
-    options: {
-      redirectTo: getRedirectUrl(),
-    },
+    options: { redirectTo: getRedirectUrl() },
   })
 }
 
 export async function signOut() {
-  return getSupabaseClient().auth.signOut()
+  return supabase.auth.signOut()
 }
-
-// Export proxy object for backwards compatibility
-export const supabase = new Proxy({} as any, {
-  get: (target, prop) => {
-    if (prop === 'auth') {
-      return getSupabaseClient().auth
-    }
-    if (prop === 'from') {
-      return (table: string) => getSupabaseClient().from(table)
-    }
-    return getSupabaseClient()[prop as string]
-  },
-})
