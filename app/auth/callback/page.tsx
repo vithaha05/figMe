@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 export default function CallbackPage() {
-  const supabase = createClientComponentClient()
   const router = useRouter()
 
   useEffect(() => {
@@ -15,7 +14,7 @@ export default function CallbackPage() {
     }
 
     handleAuth()
-  }, [router, supabase])
+  }, [router])
 
   return (
     <div className="flex items-center justify-center h-screen">
