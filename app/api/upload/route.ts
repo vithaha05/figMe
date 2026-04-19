@@ -17,10 +17,12 @@ export async function GET(request: NextRequest) {
     // Generate timestamp (in seconds)
     const timestamp = Math.floor(Date.now() / 1000)
 
-    // Create signature
-    const stringToSign = `timestamp=${timestamp}${apiSecret}`
+    // ✅ Correct string (DO NOT include secret here)
+    const stringToSign = `timestamp=${timestamp}`
+
+    // ✅ Use HMAC-SHA256 (secure)
     const signature = crypto
-      .createHash('sha1')
+      .createHmac('sha256', apiSecret)
       .update(stringToSign)
       .digest('hex')
 
