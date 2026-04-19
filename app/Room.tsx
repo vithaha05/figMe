@@ -7,6 +7,12 @@ import Loader from "@/components/Loader";
 import { RoomProvider } from "@/liveblocks.config";
 
 const Room = ({ children }: { children: React.ReactNode }) => {
+  const hasValidLiveblocksKey = process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY?.startsWith("pk_");
+  
+  if (!hasValidLiveblocksKey) {
+    return <>{children}</>;
+  }
+
   return (
     <RoomProvider
       id="fig-room"

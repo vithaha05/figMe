@@ -1,11 +1,12 @@
-// PATTERN: Strategy — each role is a strategy object with canEdit(), canComment(), canManage().
-// The canvas component receives the strategy and delegates permission checks to it,
-// making it easy to add new roles without changing canvas logic.
+// PATTERN: Strategy — encapsulates role permissions behind swappable strategy classes.
+// This lets RBAC evolve without changing document or UI logic.
 // CLOUD PATTERN: Zero-Trust Access Control.
-// Every operation verifies role at runtime — no implicit trust based on session alone.
-// Follows cloud security principle: verify explicitly, use least privilege.
+// Every operation verifies permissions explicitly and uses DB-backed role resolution.
 
-import { supabase } from './supabase'
+import {
+  CollaboratorRepository,
+  type Collaborator,
+} from '@/lib/repositories/CollaboratorRepository'
 
 export type Role = 'owner' | 'editor' | 'viewer'
 
@@ -17,60 +18,53 @@ export interface RoleStrategy {
   canDelete: () => boolean
 }
 
+abstract class BaseRoleStrategy implements RoleStrategy {
+  abstract canEdit(): boolean
+  abstract canComment(): boolean
+  abstract canManage(): boolean
+  abstract canShare(): boolean
+  abstract canDelete(): boolean
+}
+
+class OwnerStrategy extends BaseRoleStrategy {
+  canEdit() { return true }
+  canComment() { return true }
+  canManage() { return true }
+  canShare() { return true }
+  canDelete() { return true }
+}
+
+class EditorStrategy extends BaseRoleStrategy {
+  canEdit() { return true }
+  canComment() { return true }
+  canManage() { return false }
+  canShare() { return false }
+  canDelete() { return false }
+}
+
+class ViewerStrategy extends BaseRoleStrategy {
+  canEdit() { return false }
+  canComment() { return true }
+  canManage() { return false }
+  canShare() { return false }
+  canDelete() { return false }
+}
+
 export async function getUserRole(documentId: string, userId: string): Promise<Role> {
-  // Check if user is owner
-  const { data: ownerDoc, error: ownerError } = await supabase
-    .from('documents')
-    .select('id')
-    .eq('id', documentId)
-    .eq('owner_id', userId)
-    .single()
-
-  if (ownerDoc && !ownerError) {
-    return 'owner'
-  }
-
-  // Check if user is collaborator
-  const { data: collaborator, error: collabError } = await supabase
-    .from('document_collaborators')
-    .select('role')
-    .eq('document_id', documentId)
-    .eq('user_id', userId)
-    .single()
-
-  if (collaborator && !collabError) {
-    return collaborator.role as Role
-  }
-
-  throw new Error('Access denied')
+  return CollaboratorRepository.getUserRole(documentId, userId)
 }
 
 export function getRoleStrategy(role: Role): RoleStrategy {
-  const strategies: Record<Role, RoleStrategy> = {
-    owner: {
-      canEdit: () => true,
-      canComment: () => true,
-      canManage: () => true,
-      canShare: () => true,
-      canDelete: () => true,
-    },
-    editor: {
-      canEdit: () => true,
-      canComment: () => true,
-      canManage: () => false,
-      canShare: () => false,
-      canDelete: () => false,
-    },
-    viewer: {
-      canEdit: () => false,
-      canComment: () => true,
-      canManage: () => false,
-      canShare: () => false,
-      canDelete: () => false,
-    },
+  switch (role) {
+    case 'owner':
+      return new OwnerStrategy()
+    case 'editor':
+      return new EditorStrategy()
+    case 'viewer':
+      return new ViewerStrategy()
+    default:
+      return new ViewerStrategy()
   }
-
-  return strategies[role]
 }
 
 export async function addCollaborator(
@@ -78,25 +72,8 @@ export async function addCollaborator(
   userEmail: string,
   role: Role
 ): Promise<void> {
-  // Get user by email
-  const { data: userData, error: userError } = await supabase
-    .from('auth.users')
-    .select('id')
-    .eq('email', userEmail)
-    .single()
-
-  if (userError || !userData) {
-    throw new Error('User not found')
-  }
-
-  // Add collaborator
-  const { error } = await supabase.from('document_collaborators').insert({
-    document_id: documentId,
-    user_id: userData.id,
-    role,
-  })
-
-  if (error) throw error
+  const { id } = await CollaboratorRepository.getUserByEmail(userEmail)
+  return CollaboratorRepository.addCollaborator(documentId, id, role)
 }
 
 export async function updateCollaboratorRole(
@@ -104,62 +81,16 @@ export async function updateCollaboratorRole(
   userId: string,
   role: Role
 ): Promise<void> {
-  const { error } = await supabase
-    .from('document_collaborators')
-    .update({ role })
-    .eq('document_id', documentId)
-    .eq('user_id', userId)
-
-  if (error) throw error
+  return CollaboratorRepository.updateCollaboratorRole(documentId, userId, role)
 }
 
 export async function removeCollaborator(
   documentId: string,
   userId: string
 ): Promise<void> {
-  const { error } = await supabase
-    .from('document_collaborators')
-    .delete()
-    .eq('document_id', documentId)
-    .eq('user_id', userId)
-
-  if (error) throw error
+  return CollaboratorRepository.removeCollaborator(documentId, userId)
 }
 
-export async function getCollaborators(
-  documentId: string
-): Promise<
-  Array<{
-    user_id: string
-    email: string
-    name: string
-    role: Role
-  }>
-> {
-  const { data, error } = await supabase
-    .from('document_collaborators')
-    .select('user_id, role')
-    .eq('document_id', documentId)
-
-  if (error) throw error
-
-  // Fetch user details
-  const collaborators = await Promise.all(
-    data.map(async (collab) => {
-      const { data: user } = await supabase
-        .from('auth.users')
-        .select('email, user_metadata')
-        .eq('id', collab.user_id)
-        .single()
-
-      return {
-        user_id: collab.user_id,
-        email: user?.email || '',
-        name: user?.user_metadata?.name || user?.email || '',
-        role: collab.role as Role,
-      }
-    })
-  )
-
-  return collaborators
+export async function getCollaborators(documentId: string): Promise<Array<Collaborator & { email: string; name: string }>> {
+  return CollaboratorRepository.getCollaborators(documentId)
 }

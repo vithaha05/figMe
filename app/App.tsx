@@ -19,6 +19,7 @@ import {
   renderCanvas,
 } from "@/lib/canvas";
 import { handleDelete, handleKeyDown } from "@/lib/key-events";
+import { HistoryManager } from '@/lib/commands/HistoryManager'
 import { LeftSidebar, Live, Navbar, RightSidebar } from "@/components/index";
 import { handleImageUpload } from "@/lib/shapes";
 import { defaultNavElement } from "@/constants";
@@ -97,6 +98,7 @@ const Home = () => {
    */
   const activeObjectRef = useRef<fabric.Object | null>(null);
   const isEditingRef = useRef(false);
+  const historyManagerRef = useRef(new HistoryManager())
 
   /**
    * imageInputRef is a reference to the input element that we use to upload
@@ -237,7 +239,11 @@ const Home = () => {
       // delete the selected shape from the canvas
       case "delete":
         // delete it from the canvas
-        handleDelete(fabricRef.current as any, deleteShapeFromStorage);
+        handleDelete(
+          fabricRef.current as any,
+          deleteShapeFromStorage,
+          historyManagerRef.current
+        );
         // set "select" as the active element
         setActiveElement(defaultNavElement);
         break;
@@ -291,6 +297,8 @@ const Home = () => {
         selectedShapeRef,
         isDrawing,
         shapeRef,
+        syncShapeInStorage,
+        historyManager: historyManagerRef.current,
       });
     });
 
@@ -359,6 +367,7 @@ const Home = () => {
       handleCanvasObjectModified({
         options,
         syncShapeInStorage,
+        historyManager: historyManagerRef.current,
       });
     });
 
@@ -445,6 +454,7 @@ const Home = () => {
         redo,
         syncShapeInStorage,
         deleteShapeFromStorage,
+        historyManager: historyManagerRef.current,
       })
     );
 
@@ -474,6 +484,7 @@ const Home = () => {
           redo,
           syncShapeInStorage,
           deleteShapeFromStorage,
+          historyManager: historyManagerRef.current,
         })
       );
     };
@@ -502,6 +513,7 @@ const Home = () => {
             canvas: fabricRef as any,
             shapeRef,
             syncShapeInStorage,
+            historyManager: historyManagerRef.current,
           });
         }}
         handleActiveElement={handleActiveElement}

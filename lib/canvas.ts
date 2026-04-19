@@ -1,14 +1,14 @@
 import { fabric } from "fabric";
 import { v4 as uuid4 } from "uuid";
-
+import { AddObjectCommand, ModifyObjectCommand } from '@/lib/commands/CanvasCommand'
 import {
   CanvasMouseDown,
   CanvasMouseMove,
   CanvasMouseUp,
   CanvasObjectModified,
   CanvasObjectScaling,
-  CanvasPathCreated,
   CanvasSelectionCreated,
+  CanvasPathCreated,
   RenderCanvas,
 } from "@/types/type";
 import { defaultNavElement } from "@/constants";
@@ -44,6 +44,8 @@ export const handleCanvasMouseDown = ({
   selectedShapeRef,
   isDrawing,
   shapeRef,
+  syncShapeInStorage,
+  historyManager,
 }: CanvasMouseDown) => {
   // get pointer coordinates
   const pointer = canvas.getPointer(options.e);
@@ -96,8 +98,16 @@ export const handleCanvasMouseDown = ({
 
     // if shapeRef is not null, add it to canvas
     if (shapeRef.current) {
-      // add: http://fabricjs.com/docs/fabric.Canvas.html#add
-      canvas.add(shapeRef.current);
+      if (historyManager && syncShapeInStorage) {
+        historyManager.execute(
+          new AddObjectCommand(canvas, shapeRef.current, syncShapeInStorage)
+        )
+      } else {
+        canvas.add(shapeRef.current)
+        if (syncShapeInStorage) {
+          syncShapeInStorage(shapeRef.current)
+        }
+      }
     }
   }
 };
@@ -203,14 +213,30 @@ export const handleCanvasMouseUp = ({
 export const handleCanvasObjectModified = ({
   options,
   syncShapeInStorage,
-}: CanvasObjectModified) => {
-  const target = options.target;
+  historyManager,
+}: CanvasObjectModified & { historyManager?: any }) => {
+  const target = options.target as fabric.Object | undefined;
   if (!target) return;
 
-  if (target?.type == "activeSelection") {
-    // fix this
+  if (target?.type === "activeSelection") {
+    return
+  }
+
+  const newState = target.toObject()
+  const oldState = (target as any).__previousState || {}
+
+  if (historyManager) {
+    historyManager.execute(
+      new ModifyObjectCommand(
+        target.canvas as fabric.Canvas,
+        target,
+        oldState,
+        newState,
+        syncShapeInStorage
+      )
+    )
   } else {
-    syncShapeInStorage(target);
+    syncShapeInStorage(target)
   }
 };
 
@@ -284,6 +310,10 @@ export const handleCanvasSelectionCreated = ({
 
   // get the selected element
   const selectedElement = options?.selected[0] as fabric.Object;
+
+  if (selectedElement) {
+    ;(selectedElement as any).__previousState = selectedElement.toObject()
+  }
 
   // if only one element is selected, set element attributes
   if (selectedElement && options.selected.length === 1) {

@@ -88,6 +88,7 @@ export type ImageUpload = {
   canvas: React.MutableRefObject<fabric.Canvas>;
   shapeRef: React.MutableRefObject<fabric.Object | null>;
   syncShapeInStorage: (shape: fabric.Object) => void;
+  historyManager?: any;
 };
 
 export type RightSidebarProps = {
@@ -130,6 +131,8 @@ export type CanvasMouseDown = {
   selectedShapeRef: any;
   isDrawing: React.MutableRefObject<boolean>;
   shapeRef: React.MutableRefObject<fabric.Object | null>;
+  syncShapeInStorage?: (shape: fabric.Object) => void;
+  historyManager?: any;
 };
 
 export type CanvasMouseMove = {
@@ -154,6 +157,7 @@ export type CanvasMouseUp = {
 export type CanvasObjectModified = {
   options: fabric.IEvent;
   syncShapeInStorage: (shape: fabric.Object) => void;
+  historyManager?: any;
 };
 
 export type CanvasPathCreated = {

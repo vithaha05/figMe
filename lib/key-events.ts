@@ -1,5 +1,6 @@
 import { fabric } from "fabric";
 import { v4 as uuidv4 } from "uuid";
+import { RemoveObjectCommand, AddObjectCommand } from '@/lib/commands/CanvasCommand'
 
 import { CustomFabricObject } from "@/types/type";
 
@@ -17,7 +18,8 @@ export const handleCopy = (canvas: fabric.Canvas) => {
 
 export const handlePaste = (
   canvas: fabric.Canvas,
-  syncShapeInStorage: (shape: fabric.Object) => void
+  syncShapeInStorage: (shape: fabric.Object) => void,
+  historyManager?: any
 ) => {
   if (!canvas || !(canvas instanceof fabric.Canvas)) {
     console.error("Invalid canvas object. Aborting paste operation.");
@@ -44,8 +46,14 @@ export const handlePaste = (
                 fill: "#aabbcc",
               } as CustomFabricObject<any>);
 
-              canvas.add(enlivenedObj);
-              syncShapeInStorage(enlivenedObj);
+              if (historyManager) {
+                historyManager.execute(
+                  new AddObjectCommand(canvas, enlivenedObj, syncShapeInStorage)
+                )
+              } else {
+                canvas.add(enlivenedObj);
+                syncShapeInStorage(enlivenedObj);
+              }
             });
             canvas.renderAll();
           },
@@ -60,7 +68,8 @@ export const handlePaste = (
 
 export const handleDelete = (
   canvas: fabric.Canvas,
-  deleteShapeFromStorage: (id: string) => void
+  deleteShapeFromStorage: (id: string) => void,
+  historyManager?: any
 ) => {
   const activeObjects = canvas.getActiveObjects();
   if (!activeObjects || activeObjects.length === 0) return;
@@ -68,8 +77,14 @@ export const handleDelete = (
   if (activeObjects.length > 0) {
     activeObjects.forEach((obj: CustomFabricObject<any>) => {
       if (!obj.objectId) return;
-      canvas.remove(obj);
-      deleteShapeFromStorage(obj.objectId);
+      if (historyManager) {
+        historyManager.execute(
+          new RemoveObjectCommand(canvas, obj, deleteShapeFromStorage)
+        )
+      } else {
+        canvas.remove(obj);
+        deleteShapeFromStorage(obj.objectId);
+      }
     });
   }
 
@@ -92,6 +107,7 @@ export const handleKeyDown = ({
   redo: () => void;
   syncShapeInStorage: (shape: fabric.Object) => void;
   deleteShapeFromStorage: (id: string) => void;
+  historyManager?: any;
 }) => {
   // Check if the key pressed is ctrl/cmd + c (copy)
   if ((e?.ctrlKey || e?.metaKey) && e.keyCode === 67) {
@@ -100,7 +116,7 @@ export const handleKeyDown = ({
 
   // Check if the key pressed is ctrl/cmd + v (paste)
   if ((e?.ctrlKey || e?.metaKey) && e.keyCode === 86) {
-    handlePaste(canvas, syncShapeInStorage);
+    handlePaste(canvas, syncShapeInStorage, historyManager);
   }
 
   // Check if the key pressed is delete/backspace (delete)
@@ -111,7 +127,7 @@ export const handleKeyDown = ({
   // check if the key pressed is ctrl/cmd + x (cut)
   if ((e?.ctrlKey || e?.metaKey) && e.keyCode === 88) {
     handleCopy(canvas);
-    handleDelete(canvas, deleteShapeFromStorage);
+    handleDelete(canvas, deleteShapeFromStorage, historyManager);
   }
 
   // check if the key pressed is ctrl/cmd + z (undo)
